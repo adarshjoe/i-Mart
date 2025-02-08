@@ -1,0 +1,134 @@
+
+
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class ProductListScreen extends StatefulWidget {
+  @override
+  _ProductListScreenState createState() => _ProductListScreenState();
+}
+
+class _ProductListScreenState extends State<ProductListScreen> {
+  Future<List<Map<String, dynamic>>> _fetchAllProducts() async {
+    try {
+      final querySnapshot = await FirebaseFirestore.instance.collection('products').get();
+
+      // Log the number of documents fetched
+      print("Fetched ${querySnapshot.docs.length} products.");
+
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        print("Product: $data"); // Log the product data for debugging
+
+        // Ensure fields are not null or missing before adding them to the map
+        return {
+          'id': doc.id,
+          'name': data['productName'] ?? 'Unknown Product',
+          'price': data['price'] ?? 0,
+          'discountPrice': data['discountPrice'] ?? 0,
+          'brand': data['brand'] ?? 'Unknown Brand',
+          'imageUrl': (data.containsKey('productImages') &&
+                  (data['productImages'] as List).isNotEmpty)
+              ? data['productImages'][0]
+              : 'https://example.com/default_product_image.jpg',
+        };
+      }).toList();
+    } catch (e) {
+      print("Error fetching products: $e");
+      return [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Products'),
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _fetchAllProducts(),
+        builder: (context, snapshot) {
+          // Log the snapshot data for debugging
+          print('Snapshot data: ${snapshot.data}');
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          } else if (snapshot.connectionState == ConnectionState.done) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Error fetching products: ${snapshot.error}'));
+            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Center(child: Text('No products available'));
+            } else {
+              final products = snapshot.data!;
+              return _buildProductsSection(context, products);
+            }
+          } else {
+            return Center(child: Text('Unexpected state: ${snapshot.connectionState}'));
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildProductsSection(BuildContext context, List<Map<String, dynamic>> products) {
+    return GridView.builder(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: products.length,
+      itemBuilder: (context, index) {
+        final product = products[index];
+        return _buildProductCard(product);
+      },
+    );
+  }
+
+  Widget _buildProductCard(Map<String, dynamic> product) {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Image.network(
+            product['imageUrl'],
+            height: 120,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Icon(Icons.image, size: 120),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product['name'],
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                SizedBox(height: 4),
+                Text(
+                  '₹${product['discountPrice']}',
+                  style: TextStyle(color: Colors.green),
+                ),
+                Text(
+                  '₹${product['price']}',
+                  style: TextStyle(
+                    color: Colors.red,
+                    decoration: TextDecoration.lineThrough,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Brand: ${product['brand']}',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
